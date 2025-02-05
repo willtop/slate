@@ -5,11 +5,11 @@ import torch
 
 class Shapes3D(Dataset):
     def __init__(self, root, phase):
-        assert phase in ['train', 'val', 'test']
+        assert phase in ['train', 'valid', 'test']
         with h5py.File(root, 'r') as f:
             if phase == 'train':
                 self.imgs = f['images'][:400000]
-            elif phase == 'val':
+            elif phase == 'valid':
                 self.imgs = f['images'][400001:430000]
             elif phase == 'test':
                 self.imgs = f['images'][430001:460000]

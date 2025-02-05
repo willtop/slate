@@ -8,23 +8,38 @@ from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import trange
 
 from shapes_3d import Shapes3D
+from celeba import MyCelebA
 from slate import SLATE
+
+DATASET = "celeba"
+if DATASET == "shapes3D":
+    IMAGE_SIZE = 64
+    NUM_SLOTS = 3
+    DATA_PATH = '3dshapes.h5'
+    DATA_DIR = None
+elif DATASET == "celeba":
+    IMAGE_SIZE = 224
+    NUM_SLOTS = 8
+    DATA_PATH = None
+    DATA_DIR = "data/"
+else:
+    print("Invalid dataset: ", DATASET)
+    exit(1)
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--num_workers', type=int, default=4)
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--batch_size', type=int, default=50)
-parser.add_argument('--epochs', type=int, default=20)
+parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--patience', type=int, default=4)
 parser.add_argument('--clip', type=float, default=1.0)
-parser.add_argument('--image_size', type=int, default=64)
 
 parser.add_argument('--checkpoint_path', default='checkpoint.pt.tar')
 parser.add_argument('--log_path', default='logs')
-parser.add_argument('--data_path', default='3dshapes.h5')
 
 parser.add_argument('--lr_dvae', type=float, default=3e-4)
 parser.add_argument('--lr_main', type=float, default=1e-4)
@@ -37,7 +52,6 @@ parser.add_argument('--num_heads', type=int, default=4)
 parser.add_argument('--dropout', type=float, default=0.1)
 
 parser.add_argument('--num_iterations', type=int, default=3)
-parser.add_argument('--num_slots', type=int, default=3)
 parser.add_argument('--num_slot_heads', type=int, default=1)
 parser.add_argument('--slot_size', type=int, default=192)
 parser.add_argument('--mlp_hidden_size', type=int, default=192)
@@ -60,8 +74,12 @@ log_dir = os.path.join(args.log_path, datetime.today().isoformat())
 writer = SummaryWriter(log_dir)
 writer.add_text('hparams', arg_str)
 
-train_dataset = Shapes3D(root=args.data_path, phase='train')
-val_dataset = Shapes3D(root=args.data_path, phase='val')
+if DATASET == "shapes3D":
+    train_dataset = Shapes3D(root=DATA_PATH, phase='train')
+    val_dataset = Shapes3D(root=DATA_PATH, phase='valid')
+else:
+    train_dataset = MyCelebA(root=DATA_DIR, phase="train")
+    val_dataset = MyCelebA(root=DATA_DIR, phase="valid")
 
 train_sampler = None
 val_sampler = None
@@ -80,9 +98,9 @@ val_loader = DataLoader(val_dataset, sampler=val_sampler, **loader_kwargs)
 train_epoch_size = len(train_loader)
 val_epoch_size = len(val_loader)
 
-log_interval = train_epoch_size // 5
+log_interval = train_epoch_size // 10
 
-model = SLATE(args)
+model = SLATE(IMAGE_SIZE, NUM_SLOTS, args)
 
 if os.path.isfile(args.checkpoint_path):
     checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
@@ -155,8 +173,8 @@ def visualize(image, recon_orig, gen, attns, N=8):
 
     return torch.cat((image, recon_orig, gen, attns), dim=1).view(-1, 3, H, W)
 
-
-for epoch in range(start_epoch, args.epochs):
+print(f"<<<<<<<<<<<<<<Start training SLATE on {DATASET}>>>>>>>>>>>>")
+for epoch in trange(start_epoch, args.epochs):
     
     model.train()
     
@@ -208,7 +226,7 @@ for epoch in range(start_epoch, args.epochs):
     with torch.no_grad():
         gen_img = model.reconstruct_autoregressive(image[:32])
         vis_recon = visualize(image, recon, gen_img, attns, N=32)
-        grid = vutils.make_grid(vis_recon, nrow=args.num_slots + 3, pad_value=0.2)[:, 2:-2, 2:-2]
+        grid = vutils.make_grid(vis_recon, nrow=NUM_SLOTS + 3, pad_value=0.2)[:, 2:-2, 2:-2]
         writer.add_image('TRAIN_recon/epoch={:03}'.format(epoch+1), grid)
     
     with torch.no_grad():
@@ -263,7 +281,7 @@ for epoch in range(start_epoch, args.epochs):
             if 50 <= epoch:
                 gen_img = model.reconstruct_autoregressive(image)
                 vis_recon = visualize(image, recon, gen_img, attns, N=32)
-                grid = vutils.make_grid(vis_recon, nrow=args.num_slots + 3, pad_value=0.2)[:, 2:-2, 2:-2]
+                grid = vutils.make_grid(vis_recon, nrow=NUM_SLOTS + 3, pad_value=0.2)[:, 2:-2, 2:-2]
                 writer.add_image('VAL_recon/epoch={:03}'.format(epoch + 1), grid)
 
         else:

@@ -5,19 +5,19 @@ from transformer import PositionalEncoding, TransformerDecoder
 
 
 class SLATE(nn.Module):
-    def __init__(self, args):
+    def __init__(self, img_size, num_slots, args):
         super().__init__()
 
-        self.num_slots = args.num_slots
+        self.num_slots = num_slots
         self.vocab_size = args.vocab_size
         self.d_model = args.d_model
 
         self.dvae = dVAE(args.vocab_size, args.img_channels)
 
-        self.positional_encoder = PositionalEncoding(1 + (args.image_size // 4) ** 2, args.d_model, args.dropout)
+        self.positional_encoder = PositionalEncoding(1 + (img_size // 4) ** 2, args.d_model, args.dropout)
 
         self.slot_attn = SlotAttentionEncoder(
-            args.num_iterations, args.num_slots,
+            args.num_iterations, num_slots,
             args.d_model, args.slot_size, args.mlp_hidden_size, args.pos_channels,
             args.num_slot_heads)
 
@@ -25,7 +25,7 @@ class SLATE(nn.Module):
         self.slot_proj = linear(args.slot_size, args.d_model, bias=False)
 
         self.tf_dec = TransformerDecoder(
-            args.num_dec_blocks, (args.image_size // 4) ** 2, args.d_model, args.num_heads, args.dropout)
+            args.num_dec_blocks, (img_size // 4) ** 2, args.d_model, args.num_heads, args.dropout)
 
         self.out = linear(args.d_model, args.vocab_size, bias=False)
 
